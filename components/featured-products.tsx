@@ -7,6 +7,7 @@ import type { Product } from "@/types";
 import Link from "next/link";
 import { ArrowRight, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { withTimeout } from "@/lib/utils";
 
 // Dummy products for UI display when database is not connected
 const DUMMY_PRODUCTS: Product[] = [
@@ -100,12 +101,15 @@ export function FeaturedProducts() {
     const fetchProducts = async () => {
       try {
         const supabase = createClient();
-        const { data } = await supabase
-          .from("products")
-          .select("*")
-          .gt("stock", 0)
-          .order("created_at", { ascending: false })
-          .limit(8);
+        const { data } = await withTimeout(
+          supabase
+            .from("products")
+            .select("*")
+            .gt("stock", 0)
+            .order("created_at", { ascending: false })
+            .limit(8),
+          2000
+        );
 
         if (data && data.length > 0) {
           setProducts(data);

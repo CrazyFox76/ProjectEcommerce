@@ -6,7 +6,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { useCart } from "@/lib/context/cart-context";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, withTimeout } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { ProductCard } from "@/components/product-card";
 import { Badge } from "@/components/ui/badge";
@@ -102,11 +102,14 @@ export default function ProductDetailPage() {
       const supabase = createClient();
       
       // 1. Fetch reviews joined with users
-      const { data: reviewsData, error: reviewsError } = await supabase
-        .from("product_reviews")
-        .select("*, user:users(name, email)")
-        .eq("product_id", params.id)
-        .order("created_at", { ascending: false });
+      const { data: reviewsData, error: reviewsError } = await withTimeout(
+        supabase
+          .from("product_reviews")
+          .select("*, user:users(name, email)")
+          .eq("product_id", params.id)
+          .order("created_at", { ascending: false }),
+        2500
+      );
 
       if (!reviewsError && reviewsData) {
         setReviews(reviewsData as ProductReview[]);
@@ -122,24 +125,30 @@ export default function ProductDetailPage() {
 
       // 2. Check if logged-in user has purchased
       if (user) {
-        const { data: orderItems, error: orderError } = await supabase
-          .from("order_items")
-          .select("id, order:orders!inner(user_id, status)")
-          .eq("product_id", params.id)
-          .eq("order.user_id", user.id)
-          .eq("order.status", "completed");
+        const { data: orderItems, error: orderError } = await withTimeout(
+          supabase
+            .from("order_items")
+            .select("id, order:orders!inner(user_id, status)")
+            .eq("product_id", params.id)
+            .eq("order.user_id", user.id)
+            .eq("order.status", "completed"),
+          2000
+        );
 
         const purchased = !!(!orderError && orderItems && orderItems.length > 0);
         setHasPurchased(purchased);
 
         if (purchased) {
           // Check if user already reviewed
-          const { data: existingReview } = await supabase
-            .from("product_reviews")
-            .select("id")
-            .eq("product_id", params.id)
-            .eq("user_id", user.id)
-            .maybeSingle();
+          const { data: existingReview } = await withTimeout(
+            supabase
+              .from("product_reviews")
+              .select("id")
+              .eq("product_id", params.id)
+              .eq("user_id", user.id)
+              .maybeSingle(),
+            2000
+          );
 
           setHasReviewed(!!existingReview);
         }
@@ -153,21 +162,27 @@ export default function ProductDetailPage() {
     const fetchProduct = async () => {
       try {
         const supabase = createClient();
-        const { data } = await supabase
-          .from("products")
-          .select("*")
-          .eq("id", params.id)
-          .single();
+        const { data } = await withTimeout(
+          supabase
+            .from("products")
+            .select("*")
+            .eq("id", params.id)
+            .single(),
+          2500
+        );
 
         if (data) {
           setProduct(data);
           // Fetch related products
-          const { data: relatedData } = await supabase
-            .from("products")
-            .select("*")
-            .eq("category", data.category)
-            .neq("id", data.id)
-            .limit(4);
+          const { data: relatedData } = await withTimeout(
+            supabase
+              .from("products")
+              .select("*")
+              .eq("category", data.category)
+              .neq("id", data.id)
+              .limit(4),
+            2000
+          );
           if (relatedData) setRelated(relatedData);
         } else {
           // Fallback to dummy data

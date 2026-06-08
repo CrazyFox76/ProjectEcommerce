@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import type { Product, Category } from "@/types";
 import { CATEGORIES } from "@/types";
 import { Search, SlidersHorizontal, X, Loader2, Package } from "lucide-react";
+import { withTimeout } from "@/lib/utils";
 
 const DUMMY_PRODUCTS: Product[] = [
   { id: "1", name: "LCD Samsung Galaxy A54", description: "LCD Original Samsung Galaxy A54 5G dengan frame. Super AMOLED 6.4 inch, resolusi FHD+. Garansi 30 hari.", price: 450000, stock: 25, image_url: "", category: "LCD", created_at: new Date().toISOString() },
@@ -52,7 +53,7 @@ export default function CatalogPage() {
       else if (sortBy === "price-desc") query = query.order("price", { ascending: false });
       else query = query.order("created_at", { ascending: false });
 
-      const { data } = await query;
+      const { data } = (await withTimeout(query, 2500)) as any;
 
       if (data && data.length > 0) {
         setProducts(data);

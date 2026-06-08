@@ -23,3 +23,21 @@ export function formatDate(date: string | Date): string {
     minute: "2-digit",
   }).format(new Date(date));
 }
+
+export function withTimeout<T>(promise: Promise<T> | PromiseLike<T>, timeoutMs: number = 2000): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error("Request timeout"));
+    }, timeoutMs);
+    Promise.resolve(promise)
+      .then((res) => {
+        clearTimeout(timer);
+        resolve(res);
+      })
+      .catch((err) => {
+        clearTimeout(timer);
+        reject(err);
+      });
+  });
+}
+
