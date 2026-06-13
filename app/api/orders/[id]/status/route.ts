@@ -14,9 +14,9 @@ export async function GET(
       return NextResponse.json({ error: "Missing order ID" }, { status: 400 });
     }
 
-    // Determine Sandbox or Production URL
-    const isProduction = process.env.MIDTRANS_IS_PRODUCTION === "true";
     const serverKey = process.env.MIDTRANS_SERVER_KEY || "";
+    // Determine Sandbox or Production URL (auto-detect berdasarkan prefix Server Key)
+    const isProduction = process.env.MIDTRANS_IS_PRODUCTION === "true" || (serverKey !== "" && !serverKey.startsWith("SB-"));
     
     const midtransStatusUrl = isProduction
       ? `https://api.real.midtrans.com/v2/${orderId}/status`

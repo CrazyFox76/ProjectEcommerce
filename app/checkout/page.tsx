@@ -441,7 +441,11 @@ ${notes.trim() ? `Catatan: ${notes.trim()}` : ""}`.trim();
   return (
     <>
       <Script
-        src="https://app.sandbox.midtrans.com/snap/snap.js"
+        src={
+          process.env.NEXT_PUBLIC_MIDTRANS_CLIENT_KEY?.startsWith("SB-")
+            ? "https://app.sandbox.midtrans.com/snap/snap.js"
+            : "https://app.real.midtrans.com/snap/snap.js"
+        }
         data-client-key={process.env.NEXT_PUBLIC_MIDTRANS_CLIENT_KEY}
       />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
