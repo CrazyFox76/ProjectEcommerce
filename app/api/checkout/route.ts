@@ -9,14 +9,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
 
-    const serverKey = process.env.MIDTRANS_SERVER_KEY || "";
-    // Tentukan URL Sandbox atau Production (auto-detect berdasarkan prefix Server Key)
-    const isProduction = process.env.MIDTRANS_IS_PRODUCTION === "true" || (serverKey !== "" && !serverKey.startsWith("SB-"));
+    // Tentukan URL Sandbox atau Production
+    const isProduction = process.env.MIDTRANS_IS_PRODUCTION === "true";
     const midtransUrl = isProduction
       ? "https://app.real.midtrans.com/snap/v1/transactions"
       : "https://app.sandbox.midtrans.com/snap/v1/transactions";
 
     // Buat Auth Header (Basic Auth Base64 dari Server Key + ":")
+    const serverKey = process.env.MIDTRANS_SERVER_KEY || "";
     const authHeader = `Basic ${Buffer.from(serverKey + ":").toString("base64")}`;
 
     // Tembak langsung ke API Midtrans
