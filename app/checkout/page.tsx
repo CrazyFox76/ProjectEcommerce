@@ -444,7 +444,7 @@ ${notes.trim() ? `Catatan: ${notes.trim()}` : ""}`.trim();
         src={
           process.env.NEXT_PUBLIC_MIDTRANS_CLIENT_KEY?.startsWith("SB-")
             ? "https://app.sandbox.midtrans.com/snap/snap.js"
-            : "https://app.real.midtrans.com/snap/snap.js"
+            : "https://app.midtrans.com/snap/snap.js"
         }
         data-client-key={process.env.NEXT_PUBLIC_MIDTRANS_CLIENT_KEY}
       />
