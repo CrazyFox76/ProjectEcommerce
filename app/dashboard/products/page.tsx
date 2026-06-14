@@ -96,7 +96,8 @@ export default function ProductsManagementPage() {
         .eq("id", editing.id);
 
       if (error) {
-        toast.error("Gagal mengupdate produk");
+        console.error("Update Error:", error);
+        toast.error(`Gagal mengupdate produk: ${error.message}`);
       } else {
         toast.success("Produk berhasil diupdate");
       }
@@ -104,7 +105,8 @@ export default function ProductsManagementPage() {
       const { error } = await supabase.from("products").insert(productData);
 
       if (error) {
-        toast.error("Gagal menambah produk");
+        console.error("Insert Error:", error);
+        toast.error(`Gagal menambah produk: ${error.message}`);
       } else {
         toast.success("Produk berhasil ditambahkan");
       }
