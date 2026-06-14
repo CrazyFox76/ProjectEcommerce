@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import { createClient } from "@/lib/supabase/client";
 import { formatCurrency } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -138,17 +139,18 @@ export default function ProductsManagementPage() {
     const fileName = `${Date.now()}.${fileExt}`;
 
     const { error } = await supabase.storage
-      .from("products")
+      .from("product_images")
       .upload(fileName, file);
 
     if (error) {
-      toast.error("Gagal mengupload gambar");
-      return;
+      console.error("Upload Error:", error);
+      toast.error(`Gagal mengupload gambar (${error.message}). Gambar akan dilewati.`);
+      // Jangan return, biarkan data produk tetap tersimpan tanpa gambar baru
+    } else {
+      const { data } = supabase.storage.from("product_images").getPublicUrl(fileName);
+      setForm((prev) => ({ ...prev, image_url: data.publicUrl }));
+      toast.success("Gambar berhasil diupload");
     }
-
-    const { data } = supabase.storage.from("products").getPublicUrl(fileName);
-    setForm((prev) => ({ ...prev, image_url: data.publicUrl }));
-    toast.success("Gambar berhasil diupload");
   };
 
   const filtered = products.filter((p) =>
@@ -208,8 +210,12 @@ export default function ProductsManagementPage() {
                 >
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center shrink-0">
-                        <Package className="h-4 w-4 text-gray-400" />
+                      <div className="relative w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center shrink-0 overflow-hidden">
+                        {product.image_url ? (
+                          <Image src={product.image_url} alt={product.name} fill className="object-cover" unoptimized />
+                        ) : (
+                          <Package className="h-4 w-4 text-gray-400" />
+                        )}
                       </div>
                       <span className="font-medium text-gray-900 line-clamp-1">
                         {product.name}

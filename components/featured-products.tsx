@@ -7,7 +7,6 @@ import type { Product } from "@/types";
 import Link from "next/link";
 import { ArrowRight, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { withTimeout } from "@/lib/utils";
 
 // Dummy products for UI display when database is not connected
 const DUMMY_PRODUCTS: Product[] = [
@@ -101,15 +100,12 @@ export function FeaturedProducts() {
     const fetchProducts = async () => {
       try {
         const supabase = createClient();
-        const { data } = await withTimeout(
-          supabase
+        const { data } = await supabase
             .from("products")
             .select("*")
             .gt("stock", 0)
             .order("created_at", { ascending: false })
-            .limit(8),
-          2000
-        );
+            .limit(8);
 
         if (data && data.length > 0) {
           setProducts(data);
@@ -128,40 +124,40 @@ export function FeaturedProducts() {
   }, []);
 
   return (
-    <section className="py-16 sm:py-20 bg-gray-50">
+    <section className="py-24 sm:py-32 bg-white">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-end justify-between mb-10">
-          <div>
-            <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">
-              Produk Unggulan
+        <div className="flex flex-col sm:flex-row items-end justify-between mb-16 gap-6">
+          <div className="max-w-2xl">
+            <h2 className="text-3xl sm:text-4xl font-extrabold text-gray-900 mb-4 tracking-tight">
+              Koleksi Unggulan
             </h2>
-            <p className="text-gray-500">Spare part terlaris dan terbaru</p>
+            <p className="text-lg text-gray-500">Pilihan suku cadang terbaik untuk memastikan performa perangkat Anda kembali seperti baru.</p>
           </div>
-          <Link href="/catalog">
-            <Button variant="ghost" className="hidden sm:flex">
-              Lihat Semua
-              <ArrowRight className="h-4 w-4" />
+          <Link href="/catalog" className="hidden sm:block">
+            <Button variant="outline" className="rounded-full px-6 font-medium border-gray-200 hover:bg-gray-50">
+              Jelajahi Semua
+              <ArrowRight className="h-4 w-4 ml-2" />
             </Button>
           </Link>
         </div>
 
         {loading ? (
-          <div className="flex items-center justify-center py-20">
-            <Loader2 className="h-8 w-8 animate-spin text-primary-600" />
+          <div className="flex items-center justify-center py-32">
+            <Loader2 className="h-10 w-10 animate-spin text-gray-300" />
           </div>
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-8">
             {products.map((product) => (
               <ProductCard key={product.id} product={product} />
             ))}
           </div>
         )}
 
-        <div className="text-center mt-8 sm:hidden">
+        <div className="text-center mt-12 sm:hidden">
           <Link href="/catalog">
-            <Button variant="outline">
-              Lihat Semua Produk
-              <ArrowRight className="h-4 w-4" />
+            <Button variant="outline" className="w-full rounded-full py-6 font-medium border-gray-200">
+              Jelajahi Semua Produk
+              <ArrowRight className="h-4 w-4 ml-2" />
             </Button>
           </Link>
         </div>
