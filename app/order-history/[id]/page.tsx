@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/lib/context/auth-context";
@@ -238,33 +238,31 @@ export default function OrderDetailPage() {
 
   const orderId = params.id as string;
 
-  useEffect(() => {
-    const fetchOrder = async () => {
-      if (!user || !orderId) return;
-      const supabase = createClient();
+  const fetchOrder = useCallback(async () => {
+    if (!user || !orderId) return;
+    const supabase = createClient();
 
-      // Fetch order with items
-      const { data: orderData } = await supabase
-        .from("orders")
-        .select("*, order_items(*, product:products(*))")
-        .eq("id", orderId)
-        .eq("user_id", user.id)
-        .single();
+    // Fetch order with items
+    const { data: orderData } = await supabase
+      .from("orders")
+      .select("*, order_items(*, product:products(*))")
+      .eq("id", orderId)
+      .eq("user_id", user.id)
+      .single();
 
-      if (orderData) {
-        setOrder(orderData as OrderWithItems);
-        
-        // Background sync if order is still pending
-        if (orderData.status === "pending") {
-          fetch(`/api/orders/${orderData.id}/status`)
-            .then(res => res.ok ? res.json() : null)
-            .then(statusData => {
-              if (statusData && statusData.status && statusData.status !== "pending") {
-                setOrder(prev => prev ? { ...prev, status: statusData.status } : prev);
-              }
-            })
-            .catch(e => console.error("Failed to sync order status", e));
-        }
+    if (orderData) {
+      setOrder(orderData as OrderWithItems);
+
+      // Background sync if order is still pending
+      if (orderData.status === "pending") {
+        fetch(`/api/orders/${orderData.id}/status`)
+          .then(res => res.ok ? res.json() : null)
+          .then(statusData => {
+            if (statusData && statusData.status && statusData.status !== "pending") {
+              setOrder(prev => prev ? { ...prev, status: statusData.status } : prev);
+            }
+          })
+          .catch(e => console.error("Failed to sync order status", e));
       }
 
       // Fetch existing review
@@ -280,12 +278,28 @@ export default function OrderDetailPage() {
         setRating(reviewData.rating);
         setNote(reviewData.note || "");
       }
+    }
 
-      setLoading(false);
-    };
-
-    fetchOrder();
+    setLoading(false);
   }, [user, orderId]);
+
+  useEffect(() => {
+    fetchOrder();
+
+    // Refetch saat kembali ke tab/halaman agar status pesanan selalu sinkron
+    // dengan perubahan admin tanpa perlu refresh manual (mengatasi data basi
+    // dari Next.js Router Cache).
+    const onFocus = () => fetchOrder();
+    const onVisible = () => {
+      if (document.visibilityState === "visible") fetchOrder();
+    };
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [fetchOrder]);
 
   const handleSubmitReview = async () => {
     if (rating === 0) {

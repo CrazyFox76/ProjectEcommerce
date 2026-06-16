@@ -106,17 +106,30 @@ export default function OrdersManagementPage() {
   }, [filterStatus, searchQuery, orders]);
 
   const updateStatus = async (orderId: string, newStatus: string) => {
-    const { error } = await supabase
+    // .select() mengembalikan baris yang benar-benar ter-update. Jika RLS
+    // diam-diam memblokir (0 baris, tanpa error), kita tahu update TIDAK
+    // tersimpan — penting agar status tidak terlihat "berubah" di admin
+    // padahal di DB (dan halaman user) tetap lama.
+    const { data, error } = await supabase
       .from("orders")
       .update({ status: newStatus })
-      .eq("id", orderId);
+      .eq("id", orderId)
+      .select("id, status");
 
     if (error) {
-      toast.error("Gagal mengupdate status");
-    } else {
-      toast.success(`Status berhasil diubah ke "${statusConfig[newStatus].label}"`);
-      fetchOrders();
+      toast.error(`Gagal mengupdate status: ${error.message}`);
+      return;
     }
+
+    if (!data || data.length === 0) {
+      toast.error(
+        "Status tidak tersimpan. Pastikan akun Anda admin & policy RLS 'Admins can update orders' aktif."
+      );
+      return;
+    }
+
+    toast.success(`Status berhasil diubah ke "${statusConfig[newStatus].label}"`);
+    fetchOrders();
   };
 
   const statusCounts = statusOrder.reduce((acc, s) => {

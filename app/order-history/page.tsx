@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/lib/context/auth-context";
 import { formatCurrency, formatDate } from "@/lib/utils";
@@ -124,57 +124,72 @@ export default function OrderHistoryPage() {
   >([]);
   const [loading, setLoading] = useState(true);
 
+  const fetchOrders = useCallback(async ({ silent = false }: { silent?: boolean } = {}) => {
+    if (!isLoggedIn) {
+      setLoading(false);
+      return;
+    }
+
+    const userId = user?.id || supabaseUser?.id;
+    if (!userId) {
+      setLoading(false);
+      return;
+    }
+
+    if (!silent) setLoading(true);
+
+    try {
+      const supabase = createClient();
+      const { data } = await supabase
+        .from("orders")
+        .select("*, order_items(*, product:products(*))")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false });
+
+      if (data) {
+        setOrders(data as typeof orders);
+
+        // Background sync for pending orders to guarantee UI is up-to-date
+        const pendingOrders = data.filter((o: any) => o.status === "pending");
+        pendingOrders.forEach(async (order: any) => {
+          try {
+             const res = await fetch(`/api/orders/${order.id}/status`);
+             if (res.ok) {
+               const statusData = await res.json();
+               if (statusData.status && statusData.status !== "pending") {
+                 setOrders(prev => prev.map(o => o.id === order.id ? { ...o, status: statusData.status } : o));
+               }
+             }
+          } catch (e) {
+             console.error("Failed to sync order", order.id, e);
+          }
+        });
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  }, [user, supabaseUser, isLoggedIn]);
+
   useEffect(() => {
     if (authLoading) return;
-
-    const fetchOrders = async () => {
-      if (!isLoggedIn) {
-        setLoading(false);
-        return;
-      }
-      
-      const userId = user?.id || supabaseUser?.id;
-      if (!userId) {
-        setLoading(false);
-        return;
-      }
-
-      try {
-        const supabase = createClient();
-        const { data } = await supabase
-          .from("orders")
-          .select("*, order_items(*, product:products(*))")
-          .eq("user_id", userId)
-          .order("created_at", { ascending: false });
-
-        if (data) {
-          setOrders(data as typeof orders);
-          
-          // Background sync for pending orders to guarantee UI is up-to-date
-          const pendingOrders = data.filter((o: any) => o.status === "pending");
-          pendingOrders.forEach(async (order: any) => {
-            try {
-               const res = await fetch(`/api/orders/${order.id}/status`);
-               if (res.ok) {
-                 const statusData = await res.json();
-                 if (statusData.status && statusData.status !== "pending") {
-                   setOrders(prev => prev.map(o => o.id === order.id ? { ...o, status: statusData.status } : o));
-                 }
-               }
-            } catch (e) {
-               console.error("Failed to sync order", order.id, e);
-            }
-          });
-        }
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchOrders();
-  }, [user, supabaseUser, isLoggedIn, authLoading]);
+
+    // Refetch saat user kembali ke tab/halaman agar status selalu sinkron
+    // dengan perubahan admin (mis. "Disiapkan"), tanpa perlu refresh manual.
+    // Mengatasi data basi dari Next.js Router Cache saat navigasi balik.
+    const onFocus = () => fetchOrders({ silent: true });
+    const onVisible = () => {
+      if (document.visibilityState === "visible") fetchOrders({ silent: true });
+    };
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [authLoading, fetchOrders]);
 
   if (loading) {
     return (
