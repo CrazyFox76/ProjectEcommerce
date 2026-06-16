@@ -65,16 +65,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     getUser();
 
+    // PENTING: callback onAuthStateChange HARUS sinkron dan TIDAK boleh
+    // memanggil method supabase lain (mis. supabase.from(...)) secara langsung.
+    // supabase-js akan deadlock bila ada panggilan async di dalam handler ini —
+    // panggilan supabase berikutnya di mana pun akan menggantung selamanya,
+    // sehingga halaman "loading terus" dan baru muncul setelah refresh.
+    // Solusi: tunda fetchProfile keluar dari callback dengan setTimeout(0).
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
+      (_event, session) => {
         const authUser = session?.user ?? null;
         setSupabaseUser(authUser);
+        setLoading(false);
         if (authUser) {
-          await fetchProfile(authUser);
+          setTimeout(() => {
+            fetchProfile(authUser);
+          }, 0);
         } else {
           setUser(null);
         }
-        setLoading(false);
       }
     );
 

@@ -28,7 +28,7 @@ CREATE TABLE public.orders (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id UUID REFERENCES public.users(id) ON DELETE CASCADE NOT NULL,
   total_price BIGINT NOT NULL DEFAULT 0,
-  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'paid', 'shipped', 'completed')),
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'paid', 'preparing', 'shipped', 'completed', 'cancelled', 'failed')),
   shipping_address TEXT NOT NULL DEFAULT '',
   payment_method TEXT NOT NULL DEFAULT 'sakuku',
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
