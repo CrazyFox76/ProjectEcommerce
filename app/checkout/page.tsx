@@ -353,12 +353,15 @@ ${notes.trim() ? `Catatan: ${notes.trim()}` : ""}`.trim();
               paymentType = "permata_va";
             }
 
-            await supabase.rpc("update_order_status", {
+            // Gunakan Promise.race dengan timeout 2 detik agar tidak memblokir redirect jika jaringan lambat
+            const updatePromise = supabase.rpc("update_order_status", {
               p_order_id: order.id,
               p_status: "paid",
               p_payment_type: paymentType,
               p_transaction_id: result?.transaction_id || null,
             });
+            const timeoutPromise = new Promise(resolve => setTimeout(resolve, 2000));
+            await Promise.race([updatePromise, timeoutPromise]);
           } catch (updateErr) {
             console.error("Gagal memperbarui status order di frontend:", updateErr);
           }
@@ -368,7 +371,8 @@ ${notes.trim() ? `Catatan: ${notes.trim()}` : ""}`.trim();
           } catch (err) {
             console.error("Failed to clear cart:", err);
           }
-          window.location.href = `/checkout/success?order_id=${order.id}&status=success`;
+          
+          router.push(`/checkout/success?order_id=${order.id}&status=success`);
         },
         onPending: async function (result: any) {
           toast.success("Menunggu pembayaran Anda!");
@@ -382,12 +386,15 @@ ${notes.trim() ? `Catatan: ${notes.trim()}` : ""}`.trim();
               paymentType = "permata_va";
             }
 
-            await supabase.rpc("update_order_status", {
+            // Promise.race agar tidak memblokir redirect
+            const updatePromise = supabase.rpc("update_order_status", {
               p_order_id: order.id,
               p_status: "pending",
               p_payment_type: paymentType,
               p_transaction_id: result?.transaction_id || null,
             });
+            const timeoutPromise = new Promise(resolve => setTimeout(resolve, 2000));
+            await Promise.race([updatePromise, timeoutPromise]);
           } catch (updateErr) {
             console.error("Gagal memperbarui status order di frontend:", updateErr);
           }
@@ -397,7 +404,8 @@ ${notes.trim() ? `Catatan: ${notes.trim()}` : ""}`.trim();
           } catch (err) {
             console.error("Failed to clear cart:", err);
           }
-          window.location.href = `/checkout/success?order_id=${order.id}&status=pending`;
+          
+          router.push(`/checkout/success?order_id=${order.id}&status=pending`);
         },
         onError: function (result: any) {
           toast.error("Pembayaran gagal!");
