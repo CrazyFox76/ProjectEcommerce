@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useCart } from "@/lib/context/cart-context";
 import { useAuth } from "@/lib/context/auth-context";
 import { createClient } from "@/lib/supabase/client";
+import { finalizePayment } from "@/lib/checkout/finalize-payment";
 import { formatCurrency } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -339,17 +340,6 @@ ${notes.trim() ? `Catatan: ${notes.trim()}` : ""}`.trim();
         return;
       }
 
-      // Helper: jalankan promise dengan batas waktu agar TIDAK PERNAH memblokir redirect.
-      // Status order yang otoritatif tetap di-update oleh webhook Midtrans (server-to-server),
-      // jadi update & clearCart di sini hanya "best-effort".
-      const withTimeout = (p: PromiseLike<any>, ms: number) =>
-        Promise.race([
-          Promise.resolve(p).catch((e) => {
-            console.error("Best-effort task gagal:", e);
-          }),
-          new Promise((resolve) => setTimeout(resolve, ms)),
-        ]);
-
       const resolvePaymentType = (result: any) => {
         let paymentType = result?.payment_type || null;
         if (paymentType === "bank_transfer" && result?.va_numbers?.[0]?.bank) {
@@ -360,35 +350,37 @@ ${notes.trim() ? `Catatan: ${notes.trim()}` : ""}`.trim();
         return paymentType;
       };
 
-      // Redirect dengan hard navigation — dijamin jalan dari dalam callback Snap,
-      // tidak seperti router.push() (soft navigation) yang bisa tertelan oleh overlay Snap.
-      const goToSuccess = (finalStatus: "success" | "pending") => {
-        window.location.href = `/checkout/success?order_id=${order.id}&status=${finalStatus}`;
-      };
-
-      const finalizePayment = async (result: any, status: "paid" | "pending", redirectStatus: "success" | "pending") => {
-        await withTimeout(
-          supabase.rpc("update_order_status", {
+      // Jalankan finalisasi: best-effort (dengan timeout) lalu SELALU redirect.
+      // Pakai window.location.href (hard navigation) — dijamin jalan dari dalam
+      // callback Snap, tidak seperti router.push() yang bisa tertelan overlay Snap.
+      const runFinalize = (
+        result: any,
+        status: "paid" | "pending",
+        redirectStatus: "success" | "pending"
+      ) =>
+        finalizePayment({
+          statusUpdate: supabase.rpc("update_order_status", {
             p_order_id: order.id,
             p_status: status,
             p_payment_type: resolvePaymentType(result),
             p_transaction_id: result?.transaction_id || null,
           }),
-          2000
-        );
-        await withTimeout(Promise.resolve(clearCart()), 1500);
-        goToSuccess(redirectStatus);
-      };
+          clearCart: Promise.resolve(clearCart()),
+          navigate: (url) => {
+            window.location.href = url;
+          },
+          targetUrl: `/checkout/success?order_id=${order.id}&status=${redirectStatus}`,
+        });
 
       // @ts-ignore
       window.snap.pay(snapToken, {
         onSuccess: function (result: any) {
           toast.success("Pembayaran berhasil!");
-          finalizePayment(result, "paid", "success");
+          runFinalize(result, "paid", "success");
         },
         onPending: function (result: any) {
           toast.success("Menunggu pembayaran Anda!");
-          finalizePayment(result, "pending", "pending");
+          runFinalize(result, "pending", "pending");
         },
         onError: function (result: any) {
           toast.error("Pembayaran gagal!");
