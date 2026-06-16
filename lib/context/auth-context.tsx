@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useEffect, useState, useMemo, type ReactNode } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { createAuthChangeHandler } from "./auth-state-handler";
 import type { User } from "@/types";
 import type { User as SupabaseUser } from "@supabase/supabase-js";
 
@@ -65,26 +66,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     getUser();
 
-    // PENTING: callback onAuthStateChange HARUS sinkron dan TIDAK boleh
-    // memanggil method supabase lain (mis. supabase.from(...)) secara langsung.
-    // supabase-js akan deadlock bila ada panggilan async di dalam handler ini —
-    // panggilan supabase berikutnya di mana pun akan menggantung selamanya,
-    // sehingga halaman "loading terus" dan baru muncul setelah refresh.
-    // Solusi: tunda fetchProfile keluar dari callback dengan setTimeout(0).
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
-        const authUser = session?.user ?? null;
-        setSupabaseUser(authUser);
-        setLoading(false);
-        if (authUser) {
-          setTimeout(() => {
-            fetchProfile(authUser);
-          }, 0);
-        } else {
-          setUser(null);
-        }
-      }
-    );
+    // Handler dipisah & diuji di auth-state-handler.ts. Ia sinkron dan menunda
+    // fetchProfile keluar dari callback untuk menghindari deadlock supabase-js
+    // (penyebab bug "loading terus, harus refresh berkali-kali").
+    const handleAuthChange = createAuthChangeHandler({
+      setSupabaseUser,
+      setLoading,
+      clearUser: () => setUser(null),
+      fetchProfile,
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(handleAuthChange);
 
     return () => subscription.unsubscribe();
   }, [supabase]);
