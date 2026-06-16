@@ -16,7 +16,7 @@ export async function GET(
 
     const serverKey = process.env.MIDTRANS_SERVER_KEY || "";
     // Determine Sandbox or Production URL (auto-detect berdasarkan prefix Server Key)
-    const isProduction = process.env.MIDTRANS_IS_PRODUCTION === "true" || (serverKey !== "" && !serverKey.startsWith("SB-"));
+    const isProduction = process.env.NEXT_PUBLIC_MIDTRANS_IS_PRODUCTION === "true";
     
     const midtransStatusUrl = isProduction
       ? `https://api.real.midtrans.com/v2/${orderId}/status`

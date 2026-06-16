@@ -13,19 +13,16 @@ import Image from "next/image";
 import Script from "next/script";
 import { toast } from "sonner";
 import {
-  CreditCard,
   MapPin,
   Package,
   Check,
   ShieldCheck,
   Loader2,
-  Landmark,
-  QrCode,
 } from "lucide-react";
 
 export default function CheckoutPage() {
-  const { items, totalPrice, clearCart } = useCart();
-  const { user } = useAuth();
+  const { items, totalPrice, clearCart, loading: cartLoading } = useCart();
+  const { isLoggedIn, supabaseUser, displayEmail, displayName, user } = useAuth();
   const router = useRouter();
   const [recipientName, setRecipientName] = useState("");
   const [phone, setPhone] = useState("");
@@ -36,8 +33,6 @@ export default function CheckoutPage() {
   const [streetAddress, setStreetAddress] = useState("");
   const [notes, setNotes] = useState("");
   const [loading, setLoading] = useState(false);
-  const [success, setSuccess] = useState(false);
-  const [selectedPayment, setSelectedPayment] = useState("va");
 
   // Region dropdown state variables
   const [provincesList, setProvincesList] = useState<{ id: string; name: string }[]>([]);
@@ -175,13 +170,13 @@ export default function CheckoutPage() {
   };
 
   useEffect(() => {
-    if (user) {
-      setRecipientName(prev => prev || user.name || "");
+    if (isLoggedIn) {
+      setRecipientName(prev => prev || displayName || "");
     }
-  }, [user]);
+  }, [isLoggedIn, displayName]);
 
   const handleCheckout = async () => {
-    if (!user) {
+    if (!isLoggedIn || !supabaseUser) {
       toast.error("Silakan login terlebih dahulu");
       return;
     }
@@ -242,26 +237,38 @@ ${notes.trim() ? `Catatan: ${notes.trim()}` : ""}`.trim();
     try {
       const supabase = createClient();
 
+      // Upsert the user profile just in case it's missing to avoid FK constraint error
+      if (!user && supabaseUser) {
+        const uniqueEmail = displayEmail ? `${supabaseUser.id}-${displayEmail}` : `${supabaseUser.id}@guest.com`;
+        const { error: insertError } = await supabase.from("users").insert({
+          id: supabaseUser.id,
+          name: displayName || "Pelanggan",
+          email: uniqueEmail,
+          role: "user"
+        });
+        if (insertError) {
+          console.error("Failed to insert user profile directly, attempting auth trigger fallback:", insertError);
+          // Try to update auth.users to trigger any 'ON UPDATE' Postgres trigger
+          await supabase.auth.updateUser({
+            data: { force_sync: Date.now() }
+          });
+          // Wait a moment for the trigger to potentially complete
+          await new Promise(resolve => setTimeout(resolve, 500));
+        }
+      }
+
       // Create order
       const orderNumber = `TRX-${Date.now()}`;
-
-      // Map selectedPayment state to a descriptive label
-      let paymentMethodLabel = "Transfer Bank (VA)";
-      if (selectedPayment === "qris") {
-        paymentMethodLabel = "E-Wallet & QRIS";
-      } else if (selectedPayment === "cc") {
-        paymentMethodLabel = "Kartu Kredit/Debit";
-      }
 
       const { data: order, error: orderError } = await supabase
         .from("orders")
         .insert({
-          user_id: user.id,
+          user_id: supabaseUser.id,
           order_number: orderNumber,
           total_price: totalPrice,
           status: "pending",
           shipping_address: fullAddress,
-          payment_method: paymentMethodLabel,
+          payment_method: "Midtrans",
         })
         .select()
         .single();
@@ -298,7 +305,7 @@ ${notes.trim() ? `Catatan: ${notes.trim()}` : ""}`.trim();
           amount: totalPrice,
           customerDetails: {
             first_name: recipientName.trim(),
-            email: user.email,
+            email: displayEmail || "guest@tamimsparepart.com",
             phone: phone.trim(),
             billing_address: {
               first_name: recipientName.trim(),
@@ -356,8 +363,12 @@ ${notes.trim() ? `Catatan: ${notes.trim()}` : ""}`.trim();
             console.error("Gagal memperbarui status order di frontend:", updateErr);
           }
 
-          await clearCart();
-          router.push(`/order-history/${order.id}`);
+          try {
+            await clearCart();
+          } catch (err) {
+            console.error("Failed to clear cart:", err);
+          }
+          window.location.href = `/checkout/success?order_id=${order.id}&status=success`;
         },
         onPending: async function (result: any) {
           toast.success("Menunggu pembayaran Anda!");
@@ -381,8 +392,12 @@ ${notes.trim() ? `Catatan: ${notes.trim()}` : ""}`.trim();
             console.error("Gagal memperbarui status order di frontend:", updateErr);
           }
 
-          await clearCart();
-          router.push(`/order-history/${order.id}`);
+          try {
+            await clearCart();
+          } catch (err) {
+            console.error("Failed to clear cart:", err);
+          }
+          window.location.href = `/checkout/success?order_id=${order.id}&status=pending`;
         },
         onError: function (result: any) {
           toast.error("Pembayaran gagal!");
@@ -395,28 +410,25 @@ ${notes.trim() ? `Catatan: ${notes.trim()}` : ""}`.trim();
       });
     } catch (error: any) {
       console.error("Checkout error:", error);
-      toast.error(`Checkout gagal: ${error.message || "Silakan coba lagi"}`);
+      let message = error.message || "Gagal membuat pesanan";
+      if (message.includes("violates foreign key constraint")) {
+        message = "Akun belum sinkron dengan database. Silakan logout dan login kembali untuk menyelesaikan.";
+      }
+      toast.error(message);
     } finally {
       setLoading(false);
     }
   };
 
-  if (success) {
+
+
+
+  if (cartLoading) {
     return (
       <div className="min-h-[60vh] flex items-center justify-center px-4">
-        <div className="text-center animate-scale-in">
-          <div className="bg-emerald-100 p-6 rounded-full inline-block mb-6">
-            <Check className="h-12 w-12 text-emerald-600" />
-          </div>
-          <h2 className="text-2xl font-bold text-gray-900 mb-3">
-            Pembayaran Berhasil!
-          </h2>
-          <p className="text-gray-500 mb-2">
-            Terima kasih telah berbelanja di TAMIM SPAREPART
-          </p>
-          <p className="text-sm text-gray-400">
-            Mengalihkan ke halaman pesanan...
-          </p>
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="h-8 w-8 animate-spin text-primary-600" />
+          <p className="text-gray-500">Memuat keranjang...</p>
         </div>
       </div>
     );
@@ -442,11 +454,12 @@ ${notes.trim() ? `Catatan: ${notes.trim()}` : ""}`.trim();
     <>
       <Script
         src={
-          process.env.NEXT_PUBLIC_MIDTRANS_CLIENT_KEY?.startsWith("SB-")
-            ? "https://app.sandbox.midtrans.com/snap/snap.js"
-            : "https://app.midtrans.com/snap/snap.js"
+          process.env.NEXT_PUBLIC_MIDTRANS_IS_PRODUCTION === "true"
+            ? "https://app.midtrans.com/snap/snap.js"
+            : "https://app.sandbox.midtrans.com/snap/snap.js"
         }
         data-client-key={process.env.NEXT_PUBLIC_MIDTRANS_CLIENT_KEY}
+        strategy="afterInteractive"
       />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
       <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-8">
@@ -596,6 +609,7 @@ ${notes.trim() ? `Catatan: ${notes.trim()}` : ""}`.trim();
                         src={item.product.image_url}
                         alt={item.product.name}
                         fill
+                        unoptimized
                         className="object-cover"
                         sizes="64px"
                       />
@@ -619,103 +633,6 @@ ${notes.trim() ? `Catatan: ${notes.trim()}` : ""}`.trim();
                 </div>
               ))}
             </div>
-          </div>
-
-          {/* Payment Method */}
-          <div className="bg-white border border-gray-200 rounded-xl p-6">
-            <div className="flex items-center gap-2 mb-6">
-              <CreditCard className="h-5 w-5 text-primary-600" />
-              <h2 className="text-lg font-semibold text-gray-900">
-                Metode Pembayaran
-              </h2>
-            </div>
-            
-            <div className="space-y-3">
-              {/* Option 1: Virtual Account */}
-              <div 
-                onClick={() => setSelectedPayment("va")}
-                className={`border-2 rounded-xl p-4 flex items-center gap-3 cursor-pointer transition-all ${
-                  selectedPayment === "va" 
-                    ? "border-primary-500 bg-primary-50/50" 
-                    : "border-gray-200 hover:border-gray-300 bg-white"
-                }`}
-              >
-                <div className={`p-2.5 rounded-lg ${
-                  selectedPayment === "va" ? "bg-primary-600 text-white" : "bg-gray-100 text-gray-500"
-                }`}>
-                  <Landmark className="h-5 w-5" />
-                </div>
-                <div className="flex-1">
-                  <p className="font-semibold text-gray-900 text-sm sm:text-base">Transfer Bank (Virtual Account)</p>
-                  <p className="text-xs text-gray-500 mt-0.5">
-                    BCA, Mandiri, BNI, BRI, Permata, dll.
-                  </p>
-                </div>
-                <div className={`h-5 w-5 rounded-full border flex items-center justify-center shrink-0 ${
-                  selectedPayment === "va" ? "border-primary-600 bg-primary-600 text-white animate-scale-in" : "border-gray-300 bg-white"
-                }`}>
-                  {selectedPayment === "va" && <Check className="h-3 w-3 stroke-[3]" />}
-                </div>
-              </div>
-
-              {/* Option 2: E-Wallet & QRIS */}
-              <div 
-                onClick={() => setSelectedPayment("qris")}
-                className={`border-2 rounded-xl p-4 flex items-center gap-3 cursor-pointer transition-all ${
-                  selectedPayment === "qris" 
-                    ? "border-primary-500 bg-primary-50/50" 
-                    : "border-gray-200 hover:border-gray-300 bg-white"
-                }`}
-              >
-                <div className={`p-2.5 rounded-lg ${
-                  selectedPayment === "qris" ? "bg-primary-600 text-white" : "bg-gray-100 text-gray-500"
-                }`}>
-                  <QrCode className="h-5 w-5" />
-                </div>
-                <div className="flex-1">
-                  <p className="font-semibold text-gray-900 text-sm sm:text-base">E-Wallet & QRIS</p>
-                  <p className="text-xs text-gray-500 mt-0.5">
-                    GoPay, ShopeePay, OVO, DANA, LinkAja & QRIS
-                  </p>
-                </div>
-                <div className={`h-5 w-5 rounded-full border flex items-center justify-center shrink-0 ${
-                  selectedPayment === "qris" ? "border-primary-600 bg-primary-600 text-white animate-scale-in" : "border-gray-300 bg-white"
-                }`}>
-                  {selectedPayment === "qris" && <Check className="h-3 w-3 stroke-[3]" />}
-                </div>
-              </div>
-
-              {/* Option 3: Credit Card */}
-              <div 
-                onClick={() => setSelectedPayment("cc")}
-                className={`border-2 rounded-xl p-4 flex items-center gap-3 cursor-pointer transition-all ${
-                  selectedPayment === "cc" 
-                    ? "border-primary-500 bg-primary-50/50" 
-                    : "border-gray-200 hover:border-gray-300 bg-white"
-                }`}
-              >
-                <div className={`p-2.5 rounded-lg ${
-                  selectedPayment === "cc" ? "bg-primary-600 text-white" : "bg-gray-100 text-gray-500"
-                }`}>
-                  <CreditCard className="h-5 w-5" />
-                </div>
-                <div className="flex-1">
-                  <p className="font-semibold text-gray-900 text-sm sm:text-base">Kartu Kredit / Debit</p>
-                  <p className="text-xs text-gray-500 mt-0.5">
-                    Visa, Mastercard, JCB, American Express
-                  </p>
-                </div>
-                <div className={`h-5 w-5 rounded-full border flex items-center justify-center shrink-0 ${
-                  selectedPayment === "cc" ? "border-primary-600 bg-primary-600 text-white animate-scale-in" : "border-gray-300 bg-white"
-                }`}>
-                  {selectedPayment === "cc" && <Check className="h-3 w-3 stroke-[3]" />}
-                </div>
-              </div>
-            </div>
-
-            <p className="text-xs text-gray-400 mt-4 text-center">
-              Detail pembayaran aman diproses melalui Midtrans
-            </p>
           </div>
         </div>
 

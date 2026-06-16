@@ -97,16 +97,35 @@ export function FeaturedProducts() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let isMounted = true;
+
     const fetchProducts = async () => {
       try {
         const supabase = createClient();
-        const { data } = await supabase
+        
+        // Timeout to prevent infinite spinning if Supabase hangs
+        const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve({ timeout: true }), 3000));
+        const fetchPromise = supabase
             .from("products")
             .select("*")
             .gt("stock", 0)
             .order("created_at", { ascending: false })
             .limit(8);
 
+        const result = (await Promise.race([fetchPromise, timeoutPromise])) as {
+          data?: any[];
+          timeout?: boolean;
+        };
+
+        if (!isMounted) return;
+
+        if (result.timeout) {
+          setProducts(DUMMY_PRODUCTS);
+          setLoading(false);
+          return;
+        }
+
+        const data = result.data;
         if (data && data.length > 0) {
           setProducts(data);
         } else {
@@ -115,12 +134,19 @@ export function FeaturedProducts() {
         }
       } catch {
         // Database not available, use dummy data
-        setProducts(DUMMY_PRODUCTS);
+        if (isMounted) {
+          setProducts(DUMMY_PRODUCTS);
+        }
+      } finally {
+        if (isMounted) setLoading(false);
       }
-      setLoading(false);
     };
 
     fetchProducts();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   return (

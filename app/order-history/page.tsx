@@ -118,28 +118,63 @@ function StatusTracker({ status }: { status: string }) {
 }
 
 export default function OrderHistoryPage() {
-  const { user } = useAuth();
+  const { user, supabaseUser, isLoggedIn, loading: authLoading } = useAuth();
   const [orders, setOrders] = useState<
     (Order & { order_items: (OrderItem & { product: Product })[] })[]
   >([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchOrders = async () => {
-      if (!user) return;
-      const supabase = createClient();
-      const { data } = await supabase
-        .from("orders")
-        .select("*, order_items(*, product:products(*))")
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: false });
+    if (authLoading) return;
 
-      if (data) setOrders(data as typeof orders);
-      setLoading(false);
+    const fetchOrders = async () => {
+      if (!isLoggedIn) {
+        setLoading(false);
+        return;
+      }
+      
+      const userId = user?.id || supabaseUser?.id;
+      if (!userId) {
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const supabase = createClient();
+        const { data } = await supabase
+          .from("orders")
+          .select("*, order_items(*, product:products(*))")
+          .eq("user_id", userId)
+          .order("created_at", { ascending: false });
+
+        if (data) {
+          setOrders(data as typeof orders);
+          
+          // Background sync for pending orders to guarantee UI is up-to-date
+          const pendingOrders = data.filter((o: any) => o.status === "pending");
+          pendingOrders.forEach(async (order: any) => {
+            try {
+               const res = await fetch(`/api/orders/${order.id}/status`);
+               if (res.ok) {
+                 const statusData = await res.json();
+                 if (statusData.status && statusData.status !== "pending") {
+                   setOrders(prev => prev.map(o => o.id === order.id ? { ...o, status: statusData.status } : o));
+                 }
+               }
+            } catch (e) {
+               console.error("Failed to sync order", order.id, e);
+            }
+          });
+        }
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
     };
 
     fetchOrders();
-  }, [user]);
+  }, [user, supabaseUser, isLoggedIn, authLoading]);
 
   if (loading) {
     return (

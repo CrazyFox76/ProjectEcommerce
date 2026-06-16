@@ -62,6 +62,22 @@ export default function OrdersManagementPage() {
     if (data) {
       setOrders(data as OrderWithDetails[]);
       setFiltered(data as OrderWithDetails[]);
+
+      // Background sync for pending orders
+      const pendingOrders = data.filter((o: any) => o.status === "pending");
+      pendingOrders.forEach(async (order: any) => {
+        try {
+           const res = await fetch(`/api/orders/${order.id}/status`);
+           if (res.ok) {
+             const statusData = await res.json();
+             if (statusData.status && statusData.status !== "pending") {
+               setOrders(prev => prev.map(o => o.id === order.id ? { ...o, status: statusData.status } as OrderWithDetails : o));
+             }
+           }
+        } catch (e) {
+           console.error("Failed to sync order", order.id, e);
+        }
+      });
     }
     setLoading(false);
   }, []);

@@ -108,7 +108,7 @@ export default function ProductDetailPage() {
           .select("*, user:users(name, email)")
           .eq("product_id", params.id)
           .order("created_at", { ascending: false }),
-        2500
+        10000
       );
 
       if (!reviewsError && reviewsData) {
@@ -132,7 +132,7 @@ export default function ProductDetailPage() {
             .eq("product_id", params.id)
             .eq("order.user_id", user.id)
             .eq("order.status", "completed"),
-          2000
+          10000
         );
 
         const purchased = !!(!orderError && orderItems && orderItems.length > 0);
@@ -147,7 +147,7 @@ export default function ProductDetailPage() {
               .eq("product_id", params.id)
               .eq("user_id", user.id)
               .maybeSingle(),
-            2000
+            10000
           );
 
           setHasReviewed(!!existingReview);
@@ -168,7 +168,7 @@ export default function ProductDetailPage() {
             .select("*")
             .eq("id", params.id)
             .single(),
-          2500
+          10000
         );
 
         if (data) {
@@ -181,7 +181,7 @@ export default function ProductDetailPage() {
               .eq("category", data.category)
               .neq("id", data.id)
               .limit(4),
-            2000
+            10000
           );
           if (relatedData) setRelated(relatedData);
         } else {
@@ -259,9 +259,12 @@ export default function ProductDetailPage() {
     setTimeout(() => setAdded(false), 2000);
   };
 
-  const handleBuyNow = () => {
+  const [buying, setBuying] = useState(false);
+
+  const handleBuyNow = async () => {
     if (!product) return;
-    addItem(product.id, quantity); // berjalan di background, tanpa await
+    setBuying(true);
+    await addItem(product.id, quantity);
     router.push("/checkout");
   };
 
@@ -492,7 +495,8 @@ export default function ProductDetailPage() {
                 size="lg"
                 className="flex-1 font-semibold"
                 onClick={handleBuyNow}
-                disabled={product.stock === 0}
+                disabled={product.stock === 0 || buying}
+                loading={buying}
               >
                 Beli Sekarang
               </Button>

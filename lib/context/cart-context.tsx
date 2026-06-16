@@ -134,8 +134,23 @@ export function CartProvider({ children }: { children: ReactNode }) {
             : item
         );
         toast.success("Jumlah produk diperbarui");
+        setItems(newItems);
+        saveLocalCart(newItems);
       } else {
-        const product = findDummyProduct(productId);
+        let product = findDummyProduct(productId);
+        
+        // If not a dummy product, fetch from Supabase
+        if (!product) {
+          try {
+            const { data } = await supabase.from("products").select("*").eq("id", productId).single();
+            if (data) {
+              product = data as Product;
+            }
+          } catch (err) {
+            console.error("Error fetching product for local cart:", err);
+          }
+        }
+
         if (!product) {
           toast.error("Produk tidak ditemukan");
           return;
@@ -150,10 +165,9 @@ export function CartProvider({ children }: { children: ReactNode }) {
           },
         ];
         toast.success("Produk ditambahkan ke keranjang");
+        setItems(newItems);
+        saveLocalCart(newItems);
       }
-
-      setItems(newItems);
-      saveLocalCart(newItems);
       return;
     }
 
@@ -168,7 +182,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
       if (!error) {
         toast.success("Jumlah produk diperbarui");
-        fetchCart();
+        await fetchCart();
       }
     } else {
       const { error } = await supabase
@@ -177,10 +191,17 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
       if (!error) {
         toast.success("Produk ditambahkan ke keranjang");
-        fetchCart();
+        await fetchCart();
       } else {
         // Fallback: add locally if DB insert fails
-        const product = findDummyProduct(productId);
+        let product = findDummyProduct(productId);
+        if (!product) {
+          try {
+            const { data } = await supabase.from("products").select("*").eq("id", productId).single();
+            if (data) product = data as Product;
+          } catch (err) {}
+        }
+        
         if (product) {
           const newItems = [...items, { id: `local_${Date.now()}`, product_id: productId, quantity, product }];
           setItems(newItems);

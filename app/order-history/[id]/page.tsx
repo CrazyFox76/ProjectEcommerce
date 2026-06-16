@@ -253,6 +253,18 @@ export default function OrderDetailPage() {
 
       if (orderData) {
         setOrder(orderData as OrderWithItems);
+        
+        // Background sync if order is still pending
+        if (orderData.status === "pending") {
+          fetch(`/api/orders/${orderData.id}/status`)
+            .then(res => res.ok ? res.json() : null)
+            .then(statusData => {
+              if (statusData && statusData.status && statusData.status !== "pending") {
+                setOrder(prev => prev ? { ...prev, status: statusData.status } : prev);
+              }
+            })
+            .catch(e => console.error("Failed to sync order status", e));
+        }
       }
 
       // Fetch existing review

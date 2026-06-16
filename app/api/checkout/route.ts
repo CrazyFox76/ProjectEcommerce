@@ -10,7 +10,7 @@ export async function POST(request: Request) {
     }
 
     // Tentukan URL Sandbox atau Production
-    const isProduction = process.env.MIDTRANS_IS_PRODUCTION === "true";
+    const isProduction = process.env.NEXT_PUBLIC_MIDTRANS_IS_PRODUCTION === "true";
     const midtransUrl = isProduction
       ? "https://app.midtrans.com/snap/v1/transactions"
       : "https://app.sandbox.midtrans.com/snap/v1/transactions";

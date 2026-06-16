@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback, useMemo, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { ProductCard } from "@/components/product-card";
@@ -29,7 +29,7 @@ const DUMMY_PRODUCTS: Product[] = [
   { id: "16", name: "IC Audio iPhone 13", description: "IC Audio codec iPhone 13/13 Pro series. Mengatasi masalah speaker, mic, dan audio tidak berfungsi.", price: 165000, stock: 18, image_url: "", category: "IC", created_at: new Date().toISOString() },
 ];
 
-export default function CatalogPage() {
+function CatalogContent() {
   const searchParams = useSearchParams();
   const initialCategory = searchParams.get("category") as Category | null;
 
@@ -52,7 +52,20 @@ export default function CatalogPage() {
       else if (sortBy === "price-desc") query = query.order("price", { ascending: false });
       else query = query.order("created_at", { ascending: false });
 
-      const { data } = (await query) as any;
+      const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve({ timeout: true }), 3000));
+      const result = (await Promise.race([query, timeoutPromise])) as {
+        data?: any[];
+        timeout?: boolean;
+      };
+
+      if (result.timeout) {
+        setProducts(DUMMY_PRODUCTS);
+        setUsingDummy(true);
+        setLoading(false);
+        return;
+      }
+
+      const data = result.data;
 
       if (data && data.length > 0) {
         setProducts(data);
@@ -64,8 +77,9 @@ export default function CatalogPage() {
     } catch {
       setProducts(DUMMY_PRODUCTS);
       setUsingDummy(true);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, [search, category, sortBy]);
 
   useEffect(() => {
@@ -92,7 +106,7 @@ export default function CatalogPage() {
   }, [products, usingDummy, search, category, sortBy]);
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
+    <>
       {/* Header */}
       <div className="mb-8">
         <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">
@@ -193,6 +207,20 @@ export default function CatalogPage() {
           ))}
         </div>
       )}
+    </>
+  );
+}
+
+export default function CatalogPage() {
+  return (
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
+      <Suspense fallback={
+        <div className="flex items-center justify-center py-20">
+          <Loader2 className="h-8 w-8 animate-spin text-primary-600" />
+        </div>
+      }>
+        <CatalogContent />
+      </Suspense>
     </div>
   );
 }
