@@ -8,6 +8,7 @@ import {
   Package,
   ShoppingCart,
   Users,
+  Settings,
   ArrowLeft,
   Menu,
   X,
@@ -19,6 +20,7 @@ const sidebarLinks = [
   { href: "/dashboard/products", label: "Produk", icon: Package },
   { href: "/dashboard/orders", label: "Pesanan", icon: ShoppingCart },
   { href: "/dashboard/users", label: "Users", icon: Users },
+  { href: "/dashboard/settings", label: "Pengaturan", icon: Settings },
 ];
 
 export default function DashboardLayout({ children }: { children: ReactNode }) {

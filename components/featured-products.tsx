@@ -152,19 +152,13 @@ export function FeaturedProducts() {
   return (
     <section className="py-24 sm:py-32 bg-white">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex flex-col sm:flex-row items-end justify-between mb-16 gap-6">
-          <div className="max-w-2xl">
-            <h2 className="text-3xl sm:text-4xl font-extrabold text-gray-900 mb-4 tracking-tight">
-              Koleksi Unggulan
-            </h2>
-            <p className="text-lg text-gray-500">Pilihan suku cadang terbaik untuk memastikan performa perangkat Anda kembali seperti baru.</p>
-          </div>
-          <Link href="/catalog" className="hidden sm:block">
-            <Button variant="outline" className="rounded-full px-6 font-medium border-gray-200 hover:bg-gray-50">
-              Jelajahi Semua
-              <ArrowRight className="h-4 w-4 ml-2" />
-            </Button>
-          </Link>
+        <div className="text-center max-w-2xl mx-auto mb-14">
+          <h2 className="text-3xl sm:text-4xl font-extrabold text-gray-900 mb-3 tracking-tight">
+            Produk Unggulan
+          </h2>
+          <p className="text-lg text-gray-500">
+            Pilihan suku cadang terbaik untuk mengembalikan performa perangkat Anda seperti baru.
+          </p>
         </div>
 
         {loading ? (
