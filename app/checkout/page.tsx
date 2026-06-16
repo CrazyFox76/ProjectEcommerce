@@ -339,73 +339,56 @@ ${notes.trim() ? `Catatan: ${notes.trim()}` : ""}`.trim();
         return;
       }
 
+      // Helper: jalankan promise dengan batas waktu agar TIDAK PERNAH memblokir redirect.
+      // Status order yang otoritatif tetap di-update oleh webhook Midtrans (server-to-server),
+      // jadi update & clearCart di sini hanya "best-effort".
+      const withTimeout = (p: PromiseLike<any>, ms: number) =>
+        Promise.race([
+          Promise.resolve(p).catch((e) => {
+            console.error("Best-effort task gagal:", e);
+          }),
+          new Promise((resolve) => setTimeout(resolve, ms)),
+        ]);
+
+      const resolvePaymentType = (result: any) => {
+        let paymentType = result?.payment_type || null;
+        if (paymentType === "bank_transfer" && result?.va_numbers?.[0]?.bank) {
+          paymentType = `${result.va_numbers[0].bank.toLowerCase()}_va`;
+        } else if (paymentType === "permata") {
+          paymentType = "permata_va";
+        }
+        return paymentType;
+      };
+
+      // Redirect dengan hard navigation — dijamin jalan dari dalam callback Snap,
+      // tidak seperti router.push() (soft navigation) yang bisa tertelan oleh overlay Snap.
+      const goToSuccess = (finalStatus: "success" | "pending") => {
+        window.location.href = `/checkout/success?order_id=${order.id}&status=${finalStatus}`;
+      };
+
+      const finalizePayment = async (result: any, status: "paid" | "pending", redirectStatus: "success" | "pending") => {
+        await withTimeout(
+          supabase.rpc("update_order_status", {
+            p_order_id: order.id,
+            p_status: status,
+            p_payment_type: resolvePaymentType(result),
+            p_transaction_id: result?.transaction_id || null,
+          }),
+          2000
+        );
+        await withTimeout(Promise.resolve(clearCart()), 1500);
+        goToSuccess(redirectStatus);
+      };
+
       // @ts-ignore
       window.snap.pay(snapToken, {
-        onSuccess: async function (result: any) {
+        onSuccess: function (result: any) {
           toast.success("Pembayaran berhasil!");
-          
-          try {
-            let paymentType = result?.payment_type || null;
-            if (paymentType === "bank_transfer" && result?.va_numbers?.[0]?.bank) {
-              const bank = result.va_numbers[0].bank.toLowerCase();
-              paymentType = `${bank}_va`;
-            } else if (paymentType === "permata") {
-              paymentType = "permata_va";
-            }
-
-            // Gunakan Promise.race dengan timeout 2 detik agar tidak memblokir redirect jika jaringan lambat
-            const updatePromise = supabase.rpc("update_order_status", {
-              p_order_id: order.id,
-              p_status: "paid",
-              p_payment_type: paymentType,
-              p_transaction_id: result?.transaction_id || null,
-            });
-            const timeoutPromise = new Promise(resolve => setTimeout(resolve, 2000));
-            await Promise.race([updatePromise, timeoutPromise]);
-          } catch (updateErr) {
-            console.error("Gagal memperbarui status order di frontend:", updateErr);
-          }
-
-          try {
-            await clearCart();
-          } catch (err) {
-            console.error("Failed to clear cart:", err);
-          }
-          
-          router.push(`/checkout/success?order_id=${order.id}&status=success`);
+          finalizePayment(result, "paid", "success");
         },
-        onPending: async function (result: any) {
+        onPending: function (result: any) {
           toast.success("Menunggu pembayaran Anda!");
-
-          try {
-            let paymentType = result?.payment_type || null;
-            if (paymentType === "bank_transfer" && result?.va_numbers?.[0]?.bank) {
-              const bank = result.va_numbers[0].bank.toLowerCase();
-              paymentType = `${bank}_va`;
-            } else if (paymentType === "permata") {
-              paymentType = "permata_va";
-            }
-
-            // Promise.race agar tidak memblokir redirect
-            const updatePromise = supabase.rpc("update_order_status", {
-              p_order_id: order.id,
-              p_status: "pending",
-              p_payment_type: paymentType,
-              p_transaction_id: result?.transaction_id || null,
-            });
-            const timeoutPromise = new Promise(resolve => setTimeout(resolve, 2000));
-            await Promise.race([updatePromise, timeoutPromise]);
-          } catch (updateErr) {
-            console.error("Gagal memperbarui status order di frontend:", updateErr);
-          }
-
-          try {
-            await clearCart();
-          } catch (err) {
-            console.error("Failed to clear cart:", err);
-          }
-          
-          router.push(`/checkout/success?order_id=${order.id}&status=pending`);
+          finalizePayment(result, "pending", "pending");
         },
         onError: function (result: any) {
           toast.error("Pembayaran gagal!");
